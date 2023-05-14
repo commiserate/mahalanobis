@@ -14,7 +14,6 @@ ACT_LEFT = '←'
 ACT_RIGHT = '→'
 ACT_UP = '↑'
 ACT_DOWN = '↓'
-ACT_EXIT = 'X'
 
 def R(state):
     r = [
@@ -90,16 +89,16 @@ class ValueGrid(object):
         elif type(state) == int:
             i = state
 
-        if act == ACT_EXIT:
+        if act == 'E':
             return STATE_EXITED
 
-        if act == ACT_RIGHT:
+        if act == 'R':
             j += 1
-        if act == ACT_DOWN:
+        if act == 'D':
             i += 1
-        if act == ACT_LEFT:
+        if act == 'L':
             j -= 1
-        if act == ACT_UP:
+        if act == 'U':
             i -= 1
         # print(i,j, end='')
         if i >= len(self.grid):
@@ -131,19 +130,19 @@ class ValueGrid(object):
 # end class
 
 def getScoreMaximizingAct(state, thisVG):
-    validActs = [ACT_RIGHT, ACT_DOWN, ACT_LEFT, ACT_UP, ACT_EXIT]
+    validActs = ['R','D','L','U','X']
     i,j = state
     
     if j==0:
-        validActs.remove(ACT_LEFT)
+        validActs.remove('L')
     if i==0:
-        validActs.remove(ACT_UP)
+        validActs.remove('U')
     if i==5:
-        validActs.remove(ACT_DOWN)
+        validActs.remove('D')
     if j==4:
-        validActs.remove(ACT_RIGHT)
+        validActs.remove('R')
     if state not in NUMBERED_STATES:
-        validActs.remove(ACT_EXIT)
+        validActs.remove('X')
     
     values = [(act, thisVG.getExpectedValue(state, act)) for act in validActs]
     values = [(act,value) for act,value in values if value != None] # filter out moves into blocked "Wall" spaces
