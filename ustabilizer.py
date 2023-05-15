@@ -208,8 +208,8 @@ def printOptimalPolicy(gamma, DEBUG=False):
                 state = (i,j)
                 maxAsum, act = getScoreMaximizingAct(state, prevU)
                 stateAfterAct = newU.getStateAfterAct(state, act)
-                # prodVal = R(state) + F1(state, stateAfterAct) + (gamma * maxAsum)
-                prodVal = R(state, act) + (gamma * maxAsum)
+                prodVal = R(state, act) + F1(state, stateAfterAct) + (gamma * maxAsum)
+                # prodVal = R(state, act) + (gamma * maxAsum)
                 if DEBUG:
                     print()
                     print('State', state)
