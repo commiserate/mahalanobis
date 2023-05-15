@@ -1,4 +1,4 @@
-from copy import deepcopy
+from copy import deepcopy, copy
 from enum import Enum
 import numpy as np
 from sklearn.metrics.pairwise import manhattan_distances
@@ -9,13 +9,31 @@ NUMBERED_STATES = [
     (3,0), (3,3),
     (1,4), (4,2)
 ]
+INVALID_STATES = [
+    (0,1), (0,2),
+    (2,1), (0,3),
+    (3,1), (0,4),
+    (4,1), (1,3),
+    (4,3)
+]
 STATE_EXITED = (-1, -1)
+
 ACT_LEFT = '←'
 ACT_RIGHT = '→'
 ACT_UP = '↑'
 ACT_DOWN = '↓'
+ACT_EXIT = 'X'
+ALL_ACTS = [
+    ACT_LEFT,
+    ACT_RIGHT,
+    ACT_UP,
+    ACT_DOWN,
+    ACT_EXIT
+]
 
-def R(state):
+def R(state, act):
+    if act != ACT_EXIT:
+        return 0
     r = [
             [0, None, None, None, None],
             [0,    1,    0, None,   -1],
@@ -69,16 +87,14 @@ class ValueGrid(object):
         
         selfgrid_arr = np.array(self.grid, dtype=float)
         othergrid_arr = np.array(other.grid, dtype=float)
-        
-        selfgrid_arr = np.where(selfgrid_arr is None, np.nan, selfgrid_arr)
-        othergrid_arr = np.where(othergrid_arr is None, np.nan, othergrid_arr)
 
         # print(selfgrid_arr)
         sameGrid = np.allclose(selfgrid_arr, othergrid_arr, equal_nan=True)
         # sameGrid = self.grid == other.grid
 
         samePolicy = self.policy == other.policy
-        return sameGrid and samePolicy
+        return samePolicy
+        # return sameGrid and samePolicy
 
     def getStateAfterAct(self, state, act):
         if type(state) == tuple:
@@ -89,16 +105,16 @@ class ValueGrid(object):
         elif type(state) == int:
             i = state
 
-        if act == 'E':
+        if act == ACT_EXIT:
             return STATE_EXITED
 
-        if act == 'R':
+        if act == ACT_RIGHT:
             j += 1
-        if act == 'D':
+        if act == ACT_DOWN:
             i += 1
-        if act == 'L':
+        if act == ACT_LEFT:
             j -= 1
-        if act == 'U':
+        if act == ACT_UP:
             i -= 1
         # print(i,j, end='')
         if i >= len(self.grid):
@@ -114,9 +130,11 @@ class ValueGrid(object):
         return i,j
     
     def getExpectedValue(self, state, intendedAct):
+        # print(f'-- getExpectedValue {state} {intendedAct}')
         i,j = self.getStateAfterAct(state, intendedAct)
+        # print('state after act:',i,j)
         if (i,j) == STATE_EXITED:
-            return 0
+            return R(state, ACT_EXIT)
         return self.grid[i][j]
 
     def setGrid(self, state, value):
@@ -130,67 +148,73 @@ class ValueGrid(object):
 # end class
 
 def getScoreMaximizingAct(state, thisVG):
-    validActs = ['R','D','L','U','X']
+    validActs = copy(ALL_ACTS)
     i,j = state
     
     if j==0:
-        validActs.remove('L')
+        validActs.remove(ACT_LEFT)
     if i==0:
-        validActs.remove('U')
+        validActs.remove(ACT_UP)
     if i==5:
-        validActs.remove('D')
+        validActs.remove(ACT_DOWN)
     if j==4:
-        validActs.remove('R')
+        validActs.remove(ACT_RIGHT)
     if state not in NUMBERED_STATES:
-        validActs.remove('X')
-    
+        validActs.remove(ACT_EXIT)
+    # print('--- getScoreMaximizingAct')
+    # print('validActs', validActs)
     values = [(act, thisVG.getExpectedValue(state, act)) for act in validActs]
     values = [(act,value) for act,value in values if value != None] # filter out moves into blocked "Wall" spaces
-    # print(values)
+    if i==0 and j in [2,3]:
+        print(f'{state} act,score pairs',values)
     values.sort(key=lambda actScorePair:actScorePair[1], reverse=True)
     act, value = values[0]
     return value, act
 
-def printOptimalPolicy(gamma):
+def printOptimalPolicy(gamma, DEBUG=False):
     # U_zero = [
     #     [0, 0, 0, 0, 0],
     #     [0, 0, 0, 0, 0]
     # ]
     U_zero = [
-        # [0, None, None, None, None],
-        # [0,    1,    0, None,   -1],
-        # [4, None,    8,    1,    0],
-        # [3, None,    0,    2,    0],
-        # [0, None,    2, None,    0],
-        # [0,    0,    0,    0,    0],
-        [0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0],
+        [0, None, None, None, None],
+        [0,    0,    0, None,    0],
+        [0, None,    0,    0,    0],
+        [0, None,    0,    0,    0],
+        [0, None,    0, None,    0],
+        [0,    0,    0,    0,    0],
+        # [0, 0, 0, 0, 0],
+        # [0, 0, 0, 0, 0],
+        # [0, 0, 0, 0, 0],
+        # [0, 0, 0, 0, 0],
+        # [0, 0, 0, 0, 0],
+        # [0, 0, 0, 0, 0],
     ]
     prevU = ValueGrid(U_zero, policy=[], time=0)
     policyUpdateCount = -1
     while True:
+        # input()
         policyUpdateCount += 1
         
         newU = ValueGrid( deepcopy(prevU.grid), policy=[], time=prevU.time+1 )
         
         # for each cell in new U grid
+        if DEBUG:
+            print('Update each cell')
         for i in range(len(U_zero)):
             for j in range(len(U_zero[0])):
-                if R([i,j]) == None:
+                if (i,j) in INVALID_STATES:
                     continue
-                # print()
                 state = (i,j)
-                # print(state)
                 maxAsum, act = getScoreMaximizingAct(state, prevU)
                 stateAfterAct = newU.getStateAfterAct(state, act)
-                # print(maxAsum,act)
                 # prodVal = R(state) + F1(state, stateAfterAct) + (gamma * maxAsum)
-                prodVal = R(state) + (gamma * maxAsum)
-                # print(prodVal)
+                prodVal = R(state, act) + (gamma * maxAsum)
+                if DEBUG:
+                    print()
+                    print('State', state)
+                    print('Score/Act',maxAsum,act)
+                    print('new val for next policy iteration',prodVal)
                 newU.setGrid(state, prodVal)
                 newU.setPolicy(state, act)
 
@@ -198,8 +222,19 @@ def printOptimalPolicy(gamma):
 
         prevU = ValueGrid(newU.grid, newU.policy)
 
-        if stabilized:
-            # print('-'*50, u)
+        # print(policyUpdateCount)
+        rowLen = len("['↓', '█', '█', '█', '█']")
+        print()
+        print('-'*rowLen)
+        print()
+        if policyUpdateCount > 90:
+            for row in prevU.grid:
+                print([num for num in row])
+        for row in prevU.policy:
+            print(row)
+
+        if stabilized or policyUpdateCount == 100:
+            print('-'*50, 'COMPLETE')
             print(policyUpdateCount, 'iterations')
             for row in prevU.grid:
                 print([num for num in row])
@@ -212,7 +247,7 @@ def printOptimalPolicy(gamma):
 
 if __name__ == '__main__':
     gamma = 0.5
-    print(printOptimalPolicy(gamma))
+    print(printOptimalPolicy(gamma, DEBUG=False))
 
 # doesThisGammaGoR(gamma)
 # gammas = np.linspace(0.1221296875, 0.12212978515625, num=9)
